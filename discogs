@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+
+import readline
+import discogstool.libdiscogs as libdiscogs
+import discogstool.libtags as libtags
+import os
+import pprint
+import sys
+import discogstool.discogs_client as discogs_client
+
+def ask_matches(rs):
+    i = 1
+    for r, t in rs:
+        print "%d)" % (i,), libdiscogs.str_track(r, t)
+        i = i + 1
+    while (1):
+        s = raw_input("Enter selection, <releaseid>,<trackno>, or - to skip (default=1): ")
+        if not s:
+            s = "1"
+        if s == "-":
+            return None
+        if "," in s:
+            rid, tid = s.split(",")
+            try:
+                ret = libdiscogs.specify_track(rid, int(tid))
+            except (ValueError, libdiscogs.DiscogsException) as lde:
+                print lde
+                continue
+            return ask_matches([ret])
+        if not s.isdigit():
+            print "Invalid input, bad form"
+            continue
+        s = int(s)
+        if s < 1 or s > len(rs):
+            print "Invalid input, out of range"
+            continue
+        ret = rs[s - 1]
+        break
+    return ret
+
+def query_release():
+    while (1):
+        z = raw_input("Enter <releaseid>,<trackno> or enter to skip: ")
+        if z == "":
+            return None
+        if "," not in z:
+            print "Expecting <release>,<track_no> pair"
+            continue
+        rid, tid = z.split(",")
+        try:
+            ret = libdiscogs.specify_track(rid, int(tid))
+        except (ValueError, libdiscogs.DiscogsException) as lde:
+            print lde
+            ret = None
+        if ret:
+            return [ret]
+        print "Error retrieving track"
+
+errors = []
+
+def lookup_music(path):
+    try:
+        af = libtags.AudioFile(path)
+    except Exception:
+        errors.append(path)
+        print "Couldn't read", path
+        return
+
+    rs = []
+    if "comment" in af.keys():
+        c = unicode(af["comment"])
+        cs = c.split(" ")
+        if len(cs) == 2 and cs[1] == "VERIFIED":
+            return
+
+        # sniff automagically if release id is in comment field and track number declared
+        if af["comment"].isdigit():
+            rid = int(af["comment"])
+            if "track" in af.keys():
+                try:
+                    rs = [libdiscogs.specify_track(rid, af["track"][0])]
+                except libdiscogs.DiscogsException, lde:
+                    print lde
+            elif "title" in af.keys():
+                rs = libdiscogs.find_track(rid, af["title"])
+            else:
+                rls = libdiscogs.get_release(rid)
+                try:
+                    rs = [libdiscogs.specify_track(rid,i)
+                            for i in range(1, len(rls.tracklist) + 1)]
+                except libdiscogs.DiscogsException, lde:
+                    print lde
+
+    
+    if not rs:
+        if "artist" in af.keys() and "title" in af.keys():
+            # album can be None, but we need artist/title
+            rs = libdiscogs.find_release(af["artist"], af["title"], af["album"])
+        else:
+            # No metadata. Use filename as search term
+            rs = libdiscogs.find_release(None, af.filename)
+    print
+    print
+    print path
+    print "metadata: " + " - ".join([unicode(af[i]) for i in
+        ["track", "title", "artist", "album"] if i in af.keys()])
+
+    if not rs:
+        rs = query_release()
+
+    if rs:
+        ret = ask_matches(rs)
+        if ret:
+            result, track = ret
+            print "update with", libdiscogs.str_track(result, track)
+            af.update(result, track)
+
+
+def process_dir(path, processfn):
+    for root, dirs, files in os.walk(path, topdown=False):
+        for fname in files:
+            if fname.startswith("."):
+                continue
+            processfn(os.path.abspath(os.path.join(root, fname)))
+
+#process_dir("testmedia", lookup_music)
+
+for i in sys.argv[1:]:
+    process_dir(i, lookup_music)
+if errors:
+    print "ERRORS FOUND"
+    print errors
+

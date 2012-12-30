@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+
+import csv
+import discogstool.libdiscogs as libdiscogs
+import discogstool.posted as posted
+import sys
+
+def get_releases(filename):
+    releases = []
+    with open(filename, "rb") as csvfile:
+        reader = csv.reader(csvfile)
+        reader.next() # skip header row
+        for line in reader:
+            releaseid = int(line[7])
+            r = libdiscogs.get_release(releaseid)
+            count, price = posted.fetch_release_posted(releaseid)
+            r.count = count
+            r.price = price
+            releases.append(r)
+            sys.stderr.write(".")
+    sys.stderr.write("\n")
+    return releases
+
+if __name__ == "__main__":
+    for i in sys.argv[1:]:
+        rs = get_releases(i)
+        for r in rs:
+            print r.tsv.encode("UTF-8")
+
