@@ -10,6 +10,7 @@ from collections import defaultdict
 
 api_uri = 'http://api.discogs.com'
 user_agent = None
+tsv_key = "artist\ttitle\tlabel\tdate\tformat\tid\tcount\tprice\thave\twant\trating\traters"
 
 class DiscogsAPIError(Exception):
     """Root Exception-class for Discogs """
@@ -246,6 +247,7 @@ class Release(APIBase):
             fmts.append(u"%s: %s" % (f["name"], ("; ".join(f["descriptions"]) if "descriptions" in f else "")))
         return " ".join(fmts)
 
+    
     @property
     def tsv(self):
         rls = self.released
@@ -259,9 +261,13 @@ class Release(APIBase):
             if not dd:
                 dd = "00"
             rls = self.released[0:4] + mm + dd
-        return u"%s\t%s\t%s\t%s\t%s\t%d\t%d\t%.2f" % (
+        c = self.data["community"]
+        return u"%s\t%s\t%s\t%s\t%s\t%d\t%d\t$%.2f\t%d\t%d\t%.2f\t%d" % (
             self.artist_str, self.title, self.label_str, rls,
-            self.format_str, self._id, self.count, self.price)
+            self.format_str, self._id, self.count, self.price,
+            c["have"], c["want"], c["rating"]["average"],
+            c["rating"]["count"]
+            )
 
     def __unicode__(self):
         return (u'%s - "%s" [%s, %s] (%s)' %

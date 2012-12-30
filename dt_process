@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+
+import discogstool.libtags as libtags
+import subprocess
+import discogstool.libdiscogs as libdiscogs
+import sys
+import tempfile
+import shutil
+import argparse
+import os
+
+def process_file(path):
+    with tempfile.NamedTemporaryFile(suffix=".wav") as tmpwav, tempfile.NamedTemporaryFile(suffix=".m4a") as tmpm4a:
+        shutil.copy(path, tmpwav.name)
+        retval = subprocess.call(["normalize", "--peak", tmpwav.name])
+        if retval:
+            print "Normalization failed"
+            return
+   
+        print "Converting to M4A..."
+        retval = subprocess.call(["afconvert", "-o", tmpm4a.name, "-d", "alac",
+            "-f", "m4af", tmpwav.name])
+        if retval:
+            print "Encoding failed"
+            return
+
+        hint = os.path.basename(path).rsplit(".", 1)[0]
+        af = libtags.AudioFile(tmpm4a.name)
+        libdiscogs.lookup_music(af, hint=hint)
+        dest = af.rename_file(os.path.dirname(path), False, False, False, False)
+        print "New file:", dest
+    if args.delete:
+        os.remove(path)
+
+
+parser = argparse.ArgumentParser(
+        description="Convert WAV/FLAC files to ALAC and tag them")
+parser.add_argument("-d", "--delete", action="store_true",
+        help="Delete original file when finished")
+parser.add_argument("files", metavar="FILE", type=str, nargs="+",
+        help="Files to convert")
+args = parser.parse_args(sys.argv[1:])
+
+for i in args.files:
+    process_file(i)
+

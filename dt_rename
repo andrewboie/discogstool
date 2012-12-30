@@ -1,45 +1,17 @@
 #!/usr/bin/env python
 import argparse
-import discogstool.libtags
+import discogstool.libtags as libtags
 import sys
 import os
 import filecmp
 import shutil
 import traceback
 
-whitelist = frozenset([i for i in "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ[]()-_+.' "])
 
-def sanitize(fn):
-    return "".join([i if (i in whitelist) else "_" for i in fn])
 
 def process_file(path, args):
-    af = libtags.AudioFile(path)
-    ext = path[-3:]
-    if af["genre"] == "null":
-        print "Skipping genre unassigned", path
-        return
-    newdir = os.path.join(args.dest, sanitize(unicode(af["genre"])))
-    try:
-        bpm = int(unicode(af["bpm"]))
-    except ValueError:
-        bpm = 0
-    newfn = sanitize("[%03d] %s - %s (%s).%s" % 
-            (bpm, af["artist"], af["title"], af["year"], ext))
-    newpath = os.path.abspath(os.path.join(newdir, newfn))
-    if not os.path.exists(newpath) or not filecmp.cmp(path, newpath):
-        if args.verbose:
-            print "MOVE" if args.move else "COPY", path, "\n\t-->", newpath
-        if not args.dryrun:
-            if not os.path.exists(newdir):
-                os.makedirs(newdir)
-            if args.move:
-                shutil.move(path, newpath)
-            else:
-                shutil.copy2(path, newpath)
-    else:
-        if args.verbose:
-            print "Skipping unchanged file", newpath
-    return newpath
+    return libtags.rename_file(path, args.dest, args.verbose,
+            args.dryrun, args.move, True)
 
 parser = argparse.ArgumentParser(description='Copy music files, renaming them')
 parser.add_argument("-s", "--src", default="/Users/andrew/Music/iTunes/iTunes Media/Music/",

@@ -7,7 +7,7 @@ import base64
 import os.path
 import util
 
-discogs.user_agent = 'TaggingTool/0.0'
+discogs.user_agent = 'TaggingTool/0.0 andrewboie@gmail.com'
 
 class DiscogsException(Exception):
     pass
@@ -23,7 +23,7 @@ def str_track(rel, tid):
         pos = str(tid) + " " + t["position"]
     else:
         pos = str(tid)
-    
+
     return u"#%s \"%s\" - %s" % (pos, art, rel)
 
 def release_filter(rel):
@@ -117,4 +117,111 @@ def fetch_image(release):
         open(util.userfile(hashuri), "wb").write(imgdata)
     return imgdata
 
+def ask_matches(rs):
+    i = 1
+    for r, t in rs:
+        print "%d)" % (i,), str_track(r, t)
+        i = i + 1
+    while (1):
+        s = raw_input("Enter selection, <releaseid>,<trackno>, or - to skip (default=1): ")
+        if not s:
+            s = "1"
+        if s == "-":
+            return None
+        if "," in s:
+            rid, tid = s.split(",")
+            try:
+                ret = specify_track(rid, int(tid))
+            except (ValueError, DiscogsException) as lde:
+                print lde
+                continue
+            return ask_matches([ret])
+        if not s.isdigit():
+            print "Invalid input, bad form"
+            continue
+        s = int(s)
+        if s < 1 or s > len(rs):
+            print "Invalid input, out of range"
+            continue
+        ret = rs[s - 1]
+        break
+    return ret
 
+def query_release():
+    while (1):
+        z = raw_input("Enter <releaseid>,<trackno> or enter to skip: ")
+        if z == "":
+            return None
+        if "," not in z:
+            print "Expecting <release>,<track_no> pair"
+            continue
+        rid, tid = z.split(",")
+        try:
+            ret = specify_track(rid, int(tid))
+        except (ValueError, DiscogsException) as lde:
+            print lde
+            ret = None
+        if ret:
+            return [ret]
+        print "Error retrieving track"
+
+def lookup_music(af, rechecking=False, hint=None):
+    rs = []
+
+    if hint:
+        rs = find_release(None, hint)
+
+    if not rs and "comment" in af.keys():
+        c = unicode(af["comment"])
+        cs = c.split(" ")
+        if not rechecking and len(cs) == 2 and cs[1] == "VERIFIED":
+            return
+
+        # sniff automagically if release id is in comment field and track number declared
+        cmt = af["comment"].split(" ")[0]
+        if cmt.isdigit():
+            rid = int(cmt)
+            if "track" in af.keys():
+                try:
+                    result, track = specify_track(rid, af["track"][0])
+                    print "auto-update with", str_track(result, track)
+                    af.update(result, track)
+                    return
+                except DiscogsException, lde:
+                    print lde
+
+            elif "title" in af.keys():
+                rs = find_track(rid, af["title"])
+            else:
+                rls = get_release(rid)
+                try:
+                    rs = [specify_track(rid,i)
+                            for i in range(1, len(rls.tracklist) + 1)]
+                except DiscogsException, lde:
+                    print lde
+
+    if not rs:
+        if "artist" in af.keys() and "title" in af.keys():
+            # album can be None, but we need artist/title
+            rs = find_release(af["artist"], af["title"], af["album"])
+        else:
+            # No metadata. Use filename as search term
+            rs = find_release(None, af.filename.rsplit(".", 1)[0])
+    if not hint:
+        print
+        print
+        print af.filename
+        print "metadata: " + " - ".join([unicode(af[i]) for i in
+            ["track", "title", "artist", "album"] if i in af.keys()])
+    else:
+        print hint
+
+    if not rs:
+        rs = query_release()
+
+    if rs:
+        ret = ask_matches(rs)
+        if ret:
+            result, track = ret
+            print "update with", str_track(result, track)
+            af.update(result, track)
