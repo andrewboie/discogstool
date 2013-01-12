@@ -9,11 +9,10 @@ import pprint
 import sys
 import argparse
 
-print "explorer"
 
 parser = argparse.ArgumentParser(description='Explor Artists / Labels')
-parser.add_argument("-l", "--label")
-parser.add_argument("-a", "--artist")
+parser.add_argument("-l", "--label", action="append")
+parser.add_argument("-a", "--artist", action="append")
 parser.add_argument("-p", "--posted", action="store_true")
 args = parser.parse_args(sys.argv[1:])
 

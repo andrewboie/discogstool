@@ -81,18 +81,18 @@ class AudioFile(object):
     def update(self, release, track):
         d = release.data
         t = release.tracklist[track - 1];
-        self["album"] = d["title"]
+        self["album"] = unicode(d["title"])
         if t["artists"]:
             self["artist"] = " ".join([unicode(i) for i in t["artists"]])
         else:
             self["artist"] = " ".join([unicode(i) for i in release.artists])
         if t["title"] == "Untitled":
-            self["title"] = "%s %s" % (d["title"], t["position"])
+            self["title"] = u"%s %s" % (d["title"], t["position"])
         else:
-            self["title"] = t["title"]
+            self["title"] = unicode(t["title"])
         self["year"] = release.released
         self["comment"] = unicode(release._id) + u" VERIFIED"
-        self["label"] = " / ".join([i._id for i in release.labels])
+        self["label"] = u" / ".join([i._id for i in release.labels])
         self["track"] = (track, len(release.tracklist))
         if "image" not in self.keys() and "images" in d:
             self["image"] = [discogs.fetch_image(release)]
@@ -113,7 +113,8 @@ class AudioFile(object):
                         value = "%d/%d" % value
                     else:
                         value = str(value[0])
-                value = clazz(encoding=0, text=value)
+                # mutagen id3 can't seem to handle unicode values
+                value = clazz(encoding=0, text=value.encode("ascii", "replace"))
         elif self.extension == "MP4":
             if mkey == "trkn":
                 value = [value]
