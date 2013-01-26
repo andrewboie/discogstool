@@ -29,14 +29,14 @@ def process_wav_file(path, args):
         retval = subprocess.call(["normalize", "-q", "--peak", tmpwav.name])
         if retval:
             raise ConversionException("Normalization failed")
-   
+
         print "Converting to M4A..."
         retval = subprocess.call(["afconvert", "-o", tmpm4a.name, "-d", "alac",
                 "-f", "m4af", tmpwav.name])
         if retval:
             raise ConversionException("Encoding failed")
         process_file(tmpm4a.name, args)
-        
+
 def process_flac_file(path, args):
     with tempfile.NamedTemporaryFile(suffix=".wav") as tmpwav:
         print "Converting to intermediate .wav..."
