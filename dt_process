@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+
+import discogstool.libtags as libtags
+import subprocess
+import discogstool.libdiscogs as libdiscogs
+import sys
+import tempfile
+import shutil
+import argparse
+import os
+
+class ConversionException(Exception):
+    pass
+
+def process_file(path, args):
+    ext = "." + path.rsplit(".", 1)[1]
+    with tempfile.NamedTemporaryFile(suffix=ext) as tmpfil:
+        shutil.copy(path, tmpfil.name)
+        af = libtags.AudioFile(tmpfil.name)
+        libdiscogs.lookup_music(af, hint=args.hint)
+        dest = af.rename_file(args.basedir, False, False, False, False)
+        print "New file:", dest
+
+
+def process_wav_file(path, args):
+    with tempfile.NamedTemporaryFile(suffix=".wav") as tmpwav, tempfile.NamedTemporaryFile(suffix=".m4a") as tmpm4a:
+        shutil.copy(path, tmpwav.name)
+        print "Normalizing..."
+        retval = subprocess.call(["normalize", "-q", "--peak", tmpwav.name])
+        if retval:
+            raise ConversionException("Normalization failed")
+
+        print "Converting to M4A..."
+        retval = subprocess.call(["afconvert", "-o", tmpm4a.name, "-d", "alac",
+                "-f", "m4af", tmpwav.name])
+        if retval:
+            raise ConversionException("Encoding failed")
+        process_file(tmpm4a.name, args)
+
+def process_flac_file(path, args):
+    with tempfile.NamedTemporaryFile(suffix=".wav") as tmpwav:
+        print "Converting to intermediate .wav..."
+        retval = subprocess.call(["flac", "--silent", "-f", "-d", "-o", tmpwav.name, path])
+        if retval:
+            raise ConversionException("FLAC decoding failed")
+        process_wav_file(tmpwav.name, args)
+
+parser = argparse.ArgumentParser(
+        description="Convert WAV/FLAC files to ALAC and tag them")
+parser.add_argument("-d", "--delete", action="store_true",
+        help="Delete original file when finished")
+parser.add_argument("files", metavar="FILE", type=str, nargs="+",
+        help="Files to convert")
+parser.add_argument("-b", "--basedir")
+
+args = parser.parse_args(sys.argv[1:])
+
+for i in args.files:
+    args.hint, extension = os.path.basename(i).rsplit(".", 1)
+    extension = extension.lower()
+    if not args.basedir:
+        args.basedir = os.path.dirname(os.path.abspath(i))
+    print "Processing", i
+    try:
+        if extension == "wav":
+            process_wav_file(i, args)
+        elif extension == "flac":
+            process_flac_file(i, args)
+        elif extension == "mp3":
+            process_file(i, args)
+        else:
+            print "Don't know how to handle", i
+            sys.exit(1)
+    except ConversionException as ce:
+        print ce
+        sys.exit(1)
+    if args.delete:
+        os.remove(i)

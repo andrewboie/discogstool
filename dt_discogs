@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+
+import readline
+import discogstool.libdiscogs as libdiscogs
+import discogstool.libtags as libtags
+import os
+import pprint
+import sys
+import argparse
+
+errors = []
+
+def process_dir(path, processfn):
+    for root, dirs, files in os.walk(path, topdown=False):
+        for fname in files:
+            if fname.startswith("."):
+                continue
+            fpath = os.path.abspath(os.path.join(root, fname))
+            try:
+                af = libtags.AudioFile(fpath)
+            except Exception as e:
+                print e
+                errors.append(fpath)
+                print "Couldn't read", fpath
+                continue
+            libdiscogs.lookup_music(af, args.rescan)
+
+
+parser = argparse.ArgumentParser(description="Fixup metadata tags based on Discogs")
+parser.add_argument("-r", "--rescan", action="store_true",
+        help="Rescan already-scanned files")
+parser.add_argument("directories", metavar="N", type=str, nargs="+",
+        help="directory to scan")
+args = parser.parse_args(sys.argv[1:])
+
+for i in args.directories:
+    process_dir(i, libdiscogs.lookup_music)
+if errors:
+    print "ERRORS FOUND"
+    for i in errors:
+        print i
+
